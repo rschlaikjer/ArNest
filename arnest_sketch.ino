@@ -2,11 +2,13 @@
 #include <Ethernet.h>
 #include <SFE_BMP180.h>
 #include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 
 #define ALTITUDE 4.0 // Altitude Medford, MA
 
 int relay_pin = 8;
 SFE_BMP180 sensor;
+LiquidCrystal_I2C lcd(0x3F,20,4); //Addr: 0x3F, 20 chars & 4 lines
 
 byte mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xED};
 
@@ -20,8 +22,18 @@ const unsigned long postingInterval = 30*1000;  // delay between updates, in mil
 
 float temp, pressure; // C, mbar
 
+char furnace_on = 0;
+
 void setup() {
-    // Wait for ethernet to init
+    // start serial port:
+    Serial.begin(9600);
+
+	lcd.init();
+	lcd.backlight();
+	lcd.setCursor(0, 0);
+	lcd.print("Booting...");
+
+    // give the ethernet module time to boot up:
     delay(1000);
     Ethernet.begin(mac);
 
@@ -33,6 +45,23 @@ void setup() {
     } else {
         while(1); // Busy halt
     }
+}
+
+void update_lcd(){
+	lcd.setCursor(0, 0);
+	lcd.print("Temp ");
+	lcd.print(temp);
+	lcd.print("C ");
+	lcd.print((temp * 9.0 / 5.0) + 32);
+	lcd.print("F");
+
+	lcd.setCursor(0, 1);
+	lcd.print("Furnace ");
+	if (furnace_on){
+		lcd.print("on ");
+	} else {
+		lcd.print("off");
+	}
 }
 
 /*
@@ -57,8 +86,10 @@ void loop() {
     // your last connection, then connect again and send data:
     if(!client.connected() && (millis() - lastConnectionTime > postingInterval)) {
         updateTemp();
+        update_lcd();
         httpRequest();
     }
+
     // store the state of the connection for next time through
     // the loop:
     lastConnected = client.connected();
@@ -91,9 +122,11 @@ space:
                     if (cmd[5] == 'y'){
                         // Turn on the heat
                         digitalWrite(relay_pin, HIGH);
+                        furnace_on = 1;
                     } else if (cmd[5] == 'n'){
                         // Turn off the heat
                         digitalWrite(relay_pin, LOW);
+                        furnace_on = 0;
                     }
                 }
             }
